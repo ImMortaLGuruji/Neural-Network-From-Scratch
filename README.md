@@ -112,7 +112,7 @@ The goal is to answer one question:
 ``` fileStructure
 NeuralNetwork/
 │
-├── datasets/
+├── dataset/
 │   └── mnist/
 │
 ├── nn/
