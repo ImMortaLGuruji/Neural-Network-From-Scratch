@@ -3,20 +3,217 @@ network.py
 ----------
 Network class - assembles layers into a trainable model.
 
-Status : STUB - Network class implemented in Stage 8.
+The Network class wraps the forward pass, backward pass, and
+optimizer step into a clean API used by train.py.
 
-What lives here
-------------------------------------
-smoke_test()            - manual forward pass, shape & loss checks.
-backward_pass_test()    - full forward → backward chain, confirms gradients flow to every parameter.
-numerical_grad_check()  - finite-difference gradient verification. The most rigorous correctness test for backprop.
+Lower-level test functions are preserved below the class
+definition for reference and regression testing.
 """
 
 import numpy as np
 from nn.layers import Dense
 from nn.activations import ReLU, Softmax
 from nn.losses import CrossEntropyLoss
+from nn.optimizer import SGD
 from nn.utils import load_mnist, one_hot
+
+# ══════════════════════════════════════════════════════════════════════════
+# Network class
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class Network:
+    """
+    Feedforward neural network - wraps layers, loss, and optimizer.
+
+    Replaces the manual wiring with a clean API:
+
+        net = Network(layers=[...], loss_fn=CrossEntropyLoss(), optimizer=SGD(...))
+        loss = net.train_step(X_batch, Y_batch)
+        preds = net.predict(X_test)
+        acc   = net.accuracy(X_test, y_test)
+
+    Design note - Softmax and the backward pass
+    -------------------------------------------
+    Softmax is the last element of `layers` and IS included in forward().
+    In backward(), however, it is skipped.
+
+    Why?  CrossEntropyLoss.backward() returns the fused Softmax+CE
+    gradient (P - Y) / N, which is already the gradient w.r.t. the
+    logits Z entering Softmax - not w.r.t. Softmax's output P.
+    So the backward chain begins one step *before* Softmax, at the
+    last Dense layer.  Calling Softmax.backward() on top of that
+    would double-apply the Softmax transformation.
+
+    Concretely, backward() iterates reversed(layers[:-1]) - all layers
+    except the final Softmax.
+
+    Parameters
+    ----------
+    layers    : list
+        Ordered list of layer/activation objects.
+        Must end with a Softmax instance.
+    loss_fn   : CrossEntropyLoss
+        Loss function.  Paired with Softmax at the output.
+    optimizer : SGD
+        Optimizer instance, already initialised with the Dense layers
+        and learning rate.
+    """
+
+    def __init__(
+        self,
+        layers: list,
+        loss_fn: CrossEntropyLoss,
+        optimizer: SGD,
+    ) -> None:
+        assert isinstance(layers[-1], Softmax), (
+            "The last layer must be Softmax. "
+            f"Got {type(layers[-1]).__name__} instead."
+        )
+        self.layers = layers
+        self.loss_fn = loss_fn
+        self.optimizer = optimizer
+
+    # ------------------------------------------------------------------
+    # Forward
+    # ------------------------------------------------------------------
+
+    def forward(self, X: np.ndarray) -> np.ndarray:
+        """
+        Run a forward pass through every layer.
+
+        Parameters
+        ----------
+        X : np.ndarray, shape (N, D_in)
+            Input batch.
+
+        Returns
+        -------
+        P : np.ndarray, shape (N, num_classes)
+            Softmax probability distribution.
+        """
+        out = X
+        for layer in self.layers:
+            out = layer.forward(out)
+        return out
+
+    # ------------------------------------------------------------------
+    # Backward
+    # ------------------------------------------------------------------
+
+    def _backward(self, dZ: np.ndarray) -> None:
+        """
+        Run the backward chain through all layers except the final Softmax.
+
+        Parameters
+        ----------
+        dZ : np.ndarray, shape (N, num_classes)
+            Gradient from loss_fn.backward() - the fused Softmax+CE
+            gradient (P - Y) / N, already past Softmax.
+
+        The chain runs in reverse order: last Dense → its ReLU → ... → first Dense.
+        Each Dense layer accumulates dW and db for the optimizer.
+        """
+        grad = dZ
+        # layers[:-1] skips Softmax - its gradient is already in dZ
+        for layer in reversed(self.layers[:-1]):
+            grad = layer.backward(grad)
+
+    # ------------------------------------------------------------------
+    # Single training step
+    # ------------------------------------------------------------------
+
+    def train_step(self, X: np.ndarray, Y: np.ndarray) -> float:
+        """
+        One complete training iteration:
+            zero_grad → forward → loss → backward → step
+
+        Parameters
+        ----------
+        X : np.ndarray, shape (N, D_in)    - input batch
+        Y : np.ndarray, shape (N, C)       - one-hot labels
+
+        Returns
+        -------
+        loss : float
+            Scalar cross-entropy loss for this batch.
+        """
+        # 1. Clear stale gradients from the previous step
+        self.optimizer.zero_grad()
+
+        # 2. Forward pass → probabilities
+        P = self.forward(X)
+
+        # 3. Compute loss
+        loss = self.loss_fn.forward(P, Y)
+
+        # 4. Backward pass → accumulate dW, db in every Dense layer
+        dZ = self.loss_fn.backward()
+        self._backward(dZ)
+
+        # 5. Gradient descent step → update W and b
+        self.optimizer.step()
+
+        return loss
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Return the predicted class index for each example.
+
+        Parameters
+        ----------
+        X : np.ndarray, shape (N, D_in)
+
+        Returns
+        -------
+        np.ndarray of shape (N,), dtype int64 - argmax of Softmax output.
+        """
+        P = self.forward(X)
+        return P.argmax(axis=1)
+
+    def accuracy(self, X: np.ndarray, y: np.ndarray) -> float:
+        """
+        Compute classification accuracy.
+
+        Parameters
+        ----------
+        X : np.ndarray, shape (N, D_in)  - input features
+        y : np.ndarray, shape (N,)       - integer class labels
+
+        Returns
+        -------
+        float in [0, 1] - fraction of correctly classified examples.
+        """
+        preds = self.predict(X)
+        return float((preds == y).mean())
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def summary(self) -> None:
+        """Print a human-readable summary of the network architecture."""
+        print("Network")
+        print("─" * 40)
+        total_params = 0
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, Dense):
+                params = layer.W.size + layer.b.size
+                total_params += params
+                print(f"  [{i}] {layer}   params={params:,}")
+            else:
+                print(f"  [{i}] {layer}")
+        print("─" * 40)
+        print(f"  Total trainable parameters: {total_params:,}")
+
+    def __repr__(self) -> str:
+        names = " → ".join(type(l).__name__ for l in self.layers)
+        return f"Network([{names}])"
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Manual Forward Pass Smoke Test
@@ -33,7 +230,7 @@ def smoke_test(batch_size: int = 64) -> None:
     sep = "─" * 60
 
     print(f"\nLoading MNIST ...")
-    X_train, y_train, _, _ = load_mnist("datasets/mnist")
+    X_train, y_train, _, _ = load_mnist("dataset/mnist")
     X = X_train[:batch_size]
     Y = one_hot(y_train[:batch_size])
     print(f"  Batch shape  : X={X.shape}  Y={Y.shape}")
@@ -62,7 +259,7 @@ def smoke_test(batch_size: int = 64) -> None:
     assert np.allclose(P.sum(axis=1), 1.0, atol=1e-5)
     print(f"  Row sums : [{P.sum(axis=1).min():.8f}, {P.sum(axis=1).max():.8f}]  ✓")
     print(f"  Loss     : {loss:.6f}  (expect ≈ {np.log(10):.6f})  ✓")
-    print(f"\nManual forward pass smoke test passed.\n")
+    print(f"\nsmoke test passed.\n")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -112,7 +309,7 @@ def backward_pass_test(batch_size: int = 64) -> None:
 
     sep = "─" * 60
 
-    X_train, y_train, _, _ = load_mnist("datasets/mnist")
+    X_train, y_train, _, _ = load_mnist("dataset/mnist")
     X = X_train[:batch_size].astype(np.float64)
     Y = one_hot(y_train[:batch_size]).astype(np.float64)
 
@@ -609,7 +806,7 @@ def backprop_test() -> None:
     print("  Full-scale check  (MNIST batch, 784→256→128→10)")
     print(sep)
 
-    X_train, y_train, _, _ = load_mnist("datasets/mnist")
+    X_train, y_train, _, _ = load_mnist("dataset/mnist")
     X64 = X_train[:64].astype(np.float64)
     Y64 = one_hot(y_train[:64]).astype(np.float64)
 
@@ -654,9 +851,9 @@ def backprop_test() -> None:
     print(f"  Loss decreased on MNIST batch  ✓")
 
     print(f"\n{'=' * 60}")
-    print(f"  Stage 6 complete - all gradients verified.")
+    print(f"  Backpropagation verification complete - all gradients verified.")
     print(f"  Backpropagation is mathematically correct.")
-    print(f"  Ready for Stage 7 (SGD Optimizer).")
+    print(f"  Ready for SGD Optimizer.")
     print(f"{'=' * 60}\n")
 
 
