@@ -175,13 +175,9 @@ class Dense:
             self._X is not None
         ), "backward() called before forward() - no cached input."
 
-        batch_size = self._X.shape[0]
+        self.dW = self._X.T @ dZ
 
-        # Gradient w.r.t. weights: average over the batch
-        self.dW = self._X.T @ dZ / batch_size
-
-        # Gradient w.r.t. biases: mean of each column of dZ
-        self.db = dZ.mean(axis=0)
+        self.db = dZ.sum(axis=0)
 
         # Gradient w.r.t. input: pass upstream
         dX = dZ @ self.W.T
