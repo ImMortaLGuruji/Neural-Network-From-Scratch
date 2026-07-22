@@ -19,19 +19,19 @@ The objective is **not** to compete with modern deep learning libraries, but to 
 
 Instead of treating neural networks as a black box, this project rebuilds every component manually:
 
-* Dense (Linear) Layers
-* Weight Initialization
-* Biases
-* Forward Propagation
-* Activation Functions
-* Softmax
-* Cross Entropy Loss
-* Backpropagation
-* Gradient Descent
-* Mini-batch Training
-* Prediction & Evaluation
+- Dense (Linear) Layers
+- Weight Initialization
+- Biases
+- Forward Propagation
+- Activation Functions
+- Softmax
+- Cross Entropy Loss
+- Backpropagation
+- Gradient Descent
+- Mini-batch Training
+- Prediction & Evaluation
 
-By the end of the project, the network is capable of learning and classifying handwritten digits from the MNIST dataset.
+By the end of the project, the network classifies handwritten digits from MNIST at **98.16% accuracy**.
 
 ---
 
@@ -44,66 +44,15 @@ loss.backward()
 optimizer.step()
 ```
 
-These two lines perform:
-
-* Matrix differentiation
-* Chain rule
-* Gradient computation
-* Parameter updates
-
-without the user ever seeing how.
+These two lines perform matrix differentiation, chain rule application, gradient computation, and parameter updates — without the user ever seeing how.
 
 This project removes those abstractions.
 
-Every multiplication.
-
-Every derivative.
-
-Every gradient.
-
-Every parameter update.
-
-is implemented manually.
-
-The goal is to answer one question:
+Every multiplication. Every derivative. Every gradient. Every parameter update — implemented manually.
 
 > **"What actually happens when a neural network learns?"**
 
----
-
-## Project Goals
-
-* Learn neural networks mathematically
-* Understand forward propagation
-* Implement backpropagation manually
-* Learn how gradients are calculated
-* Build reusable neural network components
-* Train a network without any ML framework
-* Gain intuition behind deep learning
-
----
-
-## Features
-
-✔ Fully Connected Neural Network
-
-✔ Modular Layer Design
-
-✔ ReLU Activation
-
-✔ Softmax Output
-
-✔ Cross Entropy Loss
-
-✔ Backpropagation
-
-✔ Stochastic Gradient Descent (SGD)
-
-✔ Mini-batch Training
-
-✔ Accuracy Evaluation
-
-✔ MNIST Classification
+This project answers that question from first principles.
 
 ---
 
@@ -112,20 +61,20 @@ The goal is to answer one question:
 ``` fileStructure
 NeuralNetwork/
 │
-├── dataset/
+├── datasets/
 │   └── mnist/
 │
 ├── nn/
-│   ├── layers.py
-│   ├── activations.py
-│   ├── losses.py
-│   ├── optimizer.py
-│   ├── network.py
-│   └── utils.py
+│   ├── layers.py        ← Dense layer, He init, forward + backward
+│   ├── activations.py   ← ReLU, Softmax
+│   ├── losses.py        ← Cross Entropy + fused Softmax backward
+│   ├── optimizer.py     ← SGD with optional momentum
+│   ├── network.py       ← Network class, train_step, predict, accuracy
+│   └── utils.py         ← MNIST loader, one-hot encoding
 │
-├── train.py
-├── predict.py
-├── evaluate.py
+├── train.py             ← Mini-batch training loop, weight saving
+├── evaluate.py          ← Full test-set report, confusion matrix
+├── predict.py           ← Single-image inference
 │
 ├── README.md
 └── requirements.txt
@@ -133,573 +82,164 @@ NeuralNetwork/
 
 ---
 
-## Neural Network Architecture
+## Architecture
 
-The network consists of multiple fully connected layers.
-
-``` pipeline
-Input Image
-      │
-      ▼
-Linear Layer
-      │
-      ▼
+``` text
+Input  (784)
+  │
+Dense  784 → 256    He initialization
+  │
 ReLU
-      │
-      ▼
-Linear Layer
-      │
-      ▼
+  │
+Dense  256 → 128    He initialization
+  │
 ReLU
-      │
-      ▼
-Linear Layer
-      │
-      ▼
+  │
+Dense  128 → 10     He initialization
+  │
 Softmax
-      │
-      ▼
+  │
 Prediction
 ```
 
----
-
-## From One Neuron to Many
-
-Everything begins with a single neuron.
-
-A neuron receives several inputs
-
-``` mathematics
-x₁
-x₂
-x₃
-```
-
-Each input has its own weight
-
-``` mathematics
-w₁
-w₂
-w₃
-```
-
-The neuron computes
-
-[
-z=w_1x_1+w_2x_2+w_3x_3+b
-]
-
-where
-
-* **w** = weights
-* **x** = inputs
-* **b** = bias
-
-The output is simply a weighted sum.
+Total trainable parameters: **235,146**
 
 ---
 
-### Why Bias?
+## Mathematics
 
-Without a bias, every neuron is forced to pass through the origin.
+### Single neuron
 
-Bias allows the neuron to shift its decision boundary.
+$$z = w_1 x_1 + w_2 x_2 + w_3 x_3 + b$$
 
-Mathematically,
+### Full layer (matrix form)
 
-[
-y = Wx+b
-]
-
-instead of
-
-[
-y = Wx
-]
-
-This dramatically increases the flexibility of the model.
-
----
-
-## From Neurons to Layers
-
-Instead of computing one neuron at a time, we compute all neurons simultaneously using matrix multiplication.
-
-Instead of
-
-``` mathematics
-Neuron 1
-
-Neuron 2
-
-Neuron 3
-```
-
-we compute
-
-[
-Z=XW+B
-]
-
-where
-
-* X = inputs
-* W = weights
-* B = biases
-
-This is why neural networks heavily rely on linear algebra.
-
----
-
-## Why Matrix Multiplication?
-
-Imagine computing
-
-``` mathematics
-100 neurons
-
-×
-
-784 inputs
-```
-
-using nested loops.
-
-That would require tens of thousands of multiplications.
-
-Using
-
-```python
-np.dot(inputs, weights)
-```
-
-NumPy performs the same computation using highly optimized linear algebra routines.
-
----
-
-## The Problem with Linear Layers
-
-Suppose our network contains only linear layers.
-
-``` mathematics
-Linear
-
-↓
-
-Linear
-
-↓
-
-Linear
-```
-
-Mathematically,
-
-[
-A(B(Cx))
-]
-
-is still just another linear transformation.
-
-Therefore,
-
-multiple linear layers collapse into one.
-
-The network cannot learn complex relationships.
-
----
-
-## Introducing Non-Linearity
-
-To solve this, activation functions are inserted after every layer.
-
-This project uses
+$$Z = XW + b$$
 
 ### ReLU
 
-(Rectified Linear Unit)
+$$\text{ReLU}(x) = \max(0, x)$$
 
-[
-ReLU(x)=\max(0,x)
-]
+### Softmax
 
-It simply replaces all negative values with zero.
+$$P_i = \frac{e^{z_i}}{\sum_j e^{z_j}}$$
 
-Example
-
-``` mathematics
-Input
-
-[-3,2,-1,5]
-
-↓
-
-Output
-
-[0,2,0,5]
-```
-
-ReLU enables neural networks to approximate highly complex functions.
-
----
-
-## Output Layer
-
-The final layer produces numbers called **logits**.
-
-Example
-
-``` mathematics
-[2.3, 1.2, 7.5]
-```
-
-These are **not probabilities**.
-
-To convert them into probabilities, we use Softmax.
-
----
-
-## Softmax
-
-Softmax transforms arbitrary values into probabilities.
-
-[
-P_i=\frac{e^{z_i}}{\sum_j e^{z_j}}
-]
-
-Properties
-
-* Every probability is positive.
-* All probabilities sum to 1.
-* Highest probability becomes the prediction.
-
-Example
-
-``` mathematics
-Logits
-
-[2,4,1]
-
-↓
-
-Softmax
-
-[0.11
- 0.82
- 0.07]
-```
-
----
-
-## Loss Function
-
-Once predictions are made, we compare them with the correct labels.
-
-This project uses
+Numerically stable implementation subtracts the row maximum before exponentiating.
 
 ### Cross Entropy Loss
 
-[
-L=-\sum y\log(\hat y)
-]
+$$L = -\frac{1}{N} \sum_n \sum_c y_{n,c} \log \hat{y}_{n,c}$$
 
-Cross entropy measures
+### Fused Softmax + Cross Entropy Gradient
 
-> "How wrong was the prediction?"
+$$\frac{\partial L}{\partial Z} = \frac{P - Y}{N}$$
 
-Smaller loss means better predictions.
+The Softmax Jacobian cancels analytically, leaving a clean difference between predictions and labels.
+
+### SGD Update Rule
+
+$$W \leftarrow W - \eta \cdot \nabla W$$
 
 ---
 
-## Forward Propagation
+## Implementation Notes
 
-The forward pass is simply repeated application of
+### He Initialization
 
-``` pipeline
-Linear Layer
-
-↓
-
-Activation
-
-↓
-
-Linear Layer
-
-↓
-
-Activation
-
-↓
-
-Output
+```python
+scale = np.sqrt(2.0 / in_features)
+W = np.random.randn(in_features, out_features) * scale
 ```
 
-or mathematically
+Keeps activation variance stable through ReLU layers. Without it, signals vanish or explode in deeper networks.
 
-[
-X
-\rightarrow
-WX+b
-\rightarrow
-ReLU
-\rightarrow
-WX+b
-\rightarrow
-Softmax
-]
+### Normalisation Convention
 
-The result is a probability distribution over every class.
+`CrossEntropyLoss.backward()` returns `(P - Y) / N` — the gradient is pre-normalised by batch size. `Dense.backward()` receives this and does **not** divide again. Dividing twice produces effective learning rate of `lr / N`, killing convergence.
 
----
+This bug was caught during development by a numerical gradient check, which confirmed the analytical gradient was exactly `1/N` of the finite-difference estimate.
 
-## How Does Learning Happen?
+### Softmax Skip in Backward Pass
 
-Forward propagation alone does not improve the model.
-
-Learning begins after computing the loss.
-
-The network asks
-
-> Which weights caused this mistake?
-
-To answer this, it computes gradients.
-
----
-
-## Backpropagation
-
-Backpropagation computes
-
-[
-\frac{\partial Loss}{\partial Weight}
-]
-
-for every parameter.
-
-Using the chain rule,
-
-the error is propagated backwards through every layer.
-
-``` pipeline
-Prediction
-
-↓
-
-Loss
-
-↓
-
-Output Layer
-
-↓
-
-Hidden Layer
-
-↓
-
-Input Layer
+```python
+# layers[:-1] skips Softmax — its gradient is fused into loss.backward()
+for layer in reversed(self.layers[:-1]):
+    grad = layer.backward(grad)
 ```
 
-Every weight receives feedback indicating
-
-* increase
-* decrease
-* by how much
+Calling `Softmax.backward()` separately would apply the transformation twice.
 
 ---
 
-## Gradient Descent
+## Usage
 
-Once gradients are known,
+```bash
+pip install numpy
 
-weights are updated.
+# Train (downloads MNIST automatically)
+python train.py
 
-[
-W=W-\eta \nabla W
-]
+# Evaluate on test set
+python evaluate.py
 
-where
-
-* η = learning rate
-
-This process repeats thousands of times.
-
-``` pipeline
-Forward
-
-↓
-
-Loss
-
-↓
-
-Backward
-
-↓
-
-Update
-
-↓
-
-Repeat
-```
-
-Eventually the network converges.
-
----
-
-## Learning Rate
-
-The learning rate controls the size of each update.
-
-Too small
-
-``` english
-Learning is slow
-```
-
-Too large
-
-``` english
-Training becomes unstable
-```
-
-Choosing a good learning rate is one of the most important hyperparameters.
-
----
-
-## Optimizer
-
-This project implements
-
-### Stochastic Gradient Descent (SGD)
-
-Update rule
-
-[
-W=W-\eta\frac{\partial L}{\partial W}
-]
-
-Although simple, SGD remains one of the most fundamental optimization algorithms in deep learning.
-
----
-
-## Mini-Batch Training
-
-Instead of processing the entire dataset at once,
-
-training data is divided into smaller batches.
-
-Advantages
-
-* Faster computation
-* Better GPU/CPU utilization
-* More stable gradients
-* Reduced memory usage
-
----
-
-## Training Pipeline
-
-``` pipeline
-Load Dataset
-
-↓
-
-Shuffle Data
-
-↓
-
-Create Mini Batches
-
-↓
-
-Forward Pass
-
-↓
-
-Loss
-
-↓
-
-Backward Pass
-
-↓
-
-Update Weights
-
-↓
-
-Repeat
+# Predict a single image
+python predict.py              # random image
+python predict.py --index 42   # specific index
+python predict.py --index 42 --show-all
 ```
 
 ---
 
-## Evaluation
+## Hyperparameters
 
-After training,
-
-the model predicts unseen images.
-
-Accuracy is computed as
-
-[
-Accuracy=
-\frac{Correct}{Total}
-]
-
-Higher accuracy indicates better generalization.
+| Parameter     | Value |
+|---------------|-------|
+| Learning rate | 0.1   |
+| Epochs        | 15    |
+| Batch size    | 64    |
+| Momentum      | 0.0   |
+| Optimizer     | SGD   |
 
 ---
 
-## Dataset
+## Key Learning Outcomes
 
-### MNIST
+After completing this project you should understand:
 
-* 60,000 training images
-* 10,000 testing images
-* 28 × 28 grayscale
-* Digits 0–9
-
----
-
-## Learning Outcomes
-
-After completing this project you should understand
-
-* Why neural networks use matrices
-* What weights actually represent
-* Why biases exist
-* Why activation functions are necessary
-* How Softmax converts logits into probabilities
-* Why Cross Entropy works
-* How gradients are calculated
-* How the chain rule enables learning
-* How SGD updates parameters
-* Why mini-batches improve training
-* What modern frameworks automate behind the scenes
+- Why neural networks use matrices — computing all neurons simultaneously via `XW + b` instead of looping
+- What weights represent — a learned linear map from input space to feature space
+- Why biases exist — they shift the decision boundary off the origin
+- Why activation functions are necessary — without them, any stack of linear layers collapses into one
+- How Softmax converts logits into probabilities — and why it is numerically unstable without the max-subtraction trick
+- Why Cross Entropy works — it penalises confident wrong answers with unbounded loss (`log(0) → ∞`)
+- How gradients are calculated — chain rule applied layer by layer in reverse
+- How the fused Softmax + CE gradient simplifies to `(P - Y) / N`
+- How SGD updates parameters — and why the learning rate is the most sensitive hyperparameter
+- Why mini-batches improve training — noise in gradients acts as regularisation, and shuffling prevents ordering bias
 
 ---
 
 ## Future Improvements
 
-Possible extensions include:
+- Adam Optimizer
+- Momentum SGD
+- Batch Normalisation
+- Dropout regularisation
+- Learning Rate Scheduling
+- L2 Weight Decay
+- Convolutional layers (CNNs from scratch)
+- Automatic Differentiation Engine
+- Computational Graph Visualisation
 
-* Xavier Initialization
-* He Initialization
-* Adam Optimizer
-* RMSProp
-* Momentum SGD
-* Batch Normalization
-* Dropout
-* Learning Rate Scheduling
-* L2 Regularization
-* CNNs from Scratch
-* Automatic Differentiation Engine
-* GPU Acceleration
-* Computational Graph Visualization
+---
+
+## Requirements
+
+``` text
+numpy>=1.24.0
+```
+
+Nothing else.
 
 ---
 
@@ -707,4 +247,63 @@ Possible extensions include:
 
 The purpose of this project is **understanding, not abstraction**.
 
-Every major operation—forward propagation, activation functions, loss computation, gradient calculation, and parameter updates—is written manually to expose the mechanics hidden behind high-level machine learning frameworks. By reconstructing these components from first principles, the project provides an intuitive understanding of how neural networks learn from data, making it an ideal foundation before transitioning to libraries such as PyTorch or TensorFlow.
+Every major operation — forward propagation, activation functions, loss computation, gradient calculation, and parameter updates — is written manually to expose the mechanics hidden behind high-level machine learning frameworks.
+
+The most important moment in this project is the numerical gradient check. A bug was found where gradients were being divided by batch size twice — once in the loss backward pass and once in the Dense layer backward pass. The result was an effective learning rate of `0.1 / 64 ≈ 0.00156`, producing 92% accuracy instead of 98%. The fix was two lines. The lesson was irreplaceable.
+
+By reconstructing these components from first principles, the project provides an intuitive foundation before transitioning to libraries such as PyTorch or TensorFlow.
+
+---
+
+## Results
+
+Trained on 60,000 MNIST images. Evaluated on 10,000 unseen test images.
+
+``` result
+Best validation accuracy  : 98.16%
+Final training loss       : 0.0070
+Total parameters          : 235,146
+```
+
+### Training Curve
+
+``` text
+Epoch  1   loss=0.3074   train=95.38%   val=95.10%  ◀ best
+Epoch  2   loss=0.1378   train=97.13%   val=96.71%  ◀ best
+Epoch  3   loss=0.0955   train=97.87%   val=97.09%  ◀ best
+Epoch  4   loss=0.0711   train=98.54%   val=97.49%  ◀ best
+Epoch  5   loss=0.0565   train=98.80%   val=97.69%  ◀ best
+Epoch  6   loss=0.0458   train=98.94%   val=97.51%
+Epoch  7   loss=0.0378   train=99.06%   val=97.87%  ◀ best
+Epoch  8   loss=0.0301   train=99.39%   val=97.98%  ◀ best
+Epoch  9   loss=0.0240   train=99.59%   val=98.17%  ◀ best
+Epoch 10   loss=0.0193   train=99.76%   val=98.08%
+Epoch 11   loss=0.0157   train=99.81%   val=98.06%
+Epoch 12   loss=0.0126   train=99.88%   val=98.22%  ◀ best
+Epoch 13   loss=0.0104   train=99.91%   val=98.16%
+Epoch 14   loss=0.0079   train=99.96%   val=98.36%  ◀ best
+Epoch 15   loss=0.0062   train=99.91%   val=98.10%
+```
+
+### Per-Class Accuracy
+
+| Digit | Accuracy |   | Digit | Accuracy |
+|-------|----------|---|-------|----------|
+| 0     | 99.08%   |   | 5     | 96.97%   |
+| 1     | 99.21%   |   | 6     | 98.64%   |
+| 2     | 97.77%   |   | 7     | 97.96%   |
+| 3     | 98.22%   |   | 8     | 97.33%   |
+| 4     | 98.88%   |   | 9     | 96.73%   |
+
+### Most Confused Pairs
+
+| True | Predicted | Count |                                                  Why                                                     |
+|------|-----------|-------|----------------------------------------------------------------------------------------------------------|
+| 9    | 4         | 12    |         Incomplete closure of the loop causes the digit to resemble the angular structure of a 4.        |
+| 5    | 6         | 11    |               Strong lower curvature and a weak upper stroke produce a shape similar to 6.               |
+| 9    | 7         |  9    |              Missing or faint loop leaves a dominant vertical/diagonal stroke resembling 7.              |
+| 8    | 6         |  8    |                 Poor separation between the two loops makes 8 appear as a single-loop 6.                 |
+| 7    | 2         |  8    |        Curved handwriting transforms the diagonal stroke into the characteristic upper curve of 2.       |
+| 5    | 3         |  7    | Rounded writing style reduces the distinction between the vertical edge of 5 and the double-curve of 3.  |
+| 5    | 9         |  7    |              Rounded top and closed lower curve can mimic the loop-and-tail structure of 9.              |
+| 7    | 9         |  6    |                  Handwritten flourish creates a partial loop, causing confusion with 9.                  |
