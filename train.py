@@ -23,18 +23,22 @@ Mini-batch training pipeline (one epoch)
     for each mini-batch:
         zero_grad
             │
+            ▼
         forward pass   →  probabilities P
             │
+            ▼
         cross-entropy loss
             │
+            ▼
         backward pass  →  gradients dW, db
             │
+            ▼
         optimizer.step →  update W, b
         │
-    ▼
+        ▼
     compute epoch loss & accuracy
         │
-    ▼
+        ▼
     (repeat for next epoch)
 
 Saved model
@@ -80,10 +84,10 @@ def iter_batches(X: np.ndarray, Y: np.ndarray, batch_size: int, shuffle: bool = 
 
     Parameters
     ----------
-    X          : np.ndarray, shape (N, D)   — features
-    Y          : np.ndarray, shape (N, C)   — one-hot labels
-    batch_size : int                        — examples per batch
-    shuffle    : bool                       — shuffle before each epoch
+    X          : np.ndarray, shape (N, D) - features
+    Y          : np.ndarray, shape (N, C) - one-hot labels
+    batch_size : int                      - examples per batch
+    shuffle    : bool                     - shuffle before each epoch
 
     Yields
     ------
@@ -217,7 +221,7 @@ def train() -> None:
 
     print(f"  Train : {X_train.shape[0]:,} images  {X_train.shape[1]} features")
     print(f"  Val   : {X_val.shape[0]:,} images")
-    print(f"  Classes : 0–9  ({Y_train.shape[1]} outputs)")
+    print(f"  Classes : 0-9  ({Y_train.shape[1]} outputs)")
 
     # ── Network ───────────────────────────────────────────────────────
     header("Network")

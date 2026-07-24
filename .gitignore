@@ -1,4 +1,4 @@
-dataset/*
-saved_model/*
-__pycache__/*
-nn/__pycache__/*
+dataset/
+saved_model/
+__pycache__/
+nn/__pycache__/
